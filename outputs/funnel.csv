@@ -1,0 +1,6 @@
+step_no,step,users,pct_of_signups,pct_of_prev_step
+1,signup,6000,1.0,
+2,view_product,5114,0.8523,0.8523
+3,add_to_cart,3005,0.5008,0.5876
+4,checkout,2224,0.3707,0.7401
+5,purchase,778,0.1297,0.3498
