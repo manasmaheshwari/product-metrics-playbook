@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lexi Vocabulary Coach</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: single centered column, one conversation card with a transcript and a big mic control. */
+:root{--bg:#f3f5f9;--card:#fff;--fg:#14213d;--muted:#5b6785;--accent:#2457d6;--accent-fg:#fff;--good:#16794a;--bad:#b42318;--line:#d9dfec;--bubble:#e8eefc;
+--display:'Fraunces',Georgia,serif;--body:'Inter',system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1424;--card:#171f36;--fg:#eaf0ff;--muted:#9aa7c7;--accent:#7ea2ff;--accent-fg:#0e1424;--good:#5fd39b;--bad:#ff8a80;--line:#2a3558;--bubble:#222d4d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1424;--card:#171f36;--fg:#eaf0ff;--muted:#9aa7c7;--accent:#7ea2ff;--accent-fg:#0e1424;--good:#5fd39b;--bad:#ff8a80;--line:#2a3558;--bubble:#222d4d;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 var(--body);padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font:600 2rem/1.1 var(--display);margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.log{display:flex;flex-direction:column;gap:8px;min-height:180px;max-height:340px;overflow-y:auto}
+.msg{padding:10px 12px;border-radius:12px;max-width:88%;overflow-wrap:anywhere}
+.agent{background:var(--bubble);align-self:flex-start}
+.you{background:var(--accent);color:var(--accent-fg);align-self:flex-end}
+.good{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button,input{font:inherit;border-radius:10px;border:1px solid var(--line);padding:10px 14px;background:var(--card);color:var(--fg)}
+button{cursor:pointer;font-weight:600}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.mic{flex:1;min-width:150px;padding:14px}
+button.mic.on{background:var(--bad);border-color:var(--bad);color:#fff}
+input{flex:1;min-width:0}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.note{font-size:.82rem;color:var(--muted)}
+</style>
+</head><body>
+<main>
+<header><h1>Lexi, your vocabulary coach</h1><p class="sub">Lexi says a definition out loud. You say the word back, by voice or by typing.</p></header>
+<section class="card" aria-live="polite">
+<div class="meta"><span id="lvl">Word 0 of 8</span><span id="score">Score 0</span></div>
+<div class="log" id="log"></div>
+<div class="row">
+<button class="mic" id="mic" type="button">🎤 Speak your answer</button>
+<button id="rep" type="button">Repeat</button><button id="hint" type="button">Hint</button><button id="skip" type="button">Skip</button>
+</div>
+<form class="row" id="f"><input id="ans" autocomplete="off" aria-label="Type your answer" placeholder="Or type the word"><button class="primary" type="submit">Check</button></form>
+<p class="note" id="note"></p>
+</section>
+<button id="start" class="primary" type="button">Start a new round</button>
+</main>
+<script>
+const WORDS=[
+["ephemeral","lasting for a very short time"],["meticulous","showing great attention to detail"],["candid","honest and direct in speech"],
+["resilient","able to recover quickly from difficulty"],["ambiguous","open to more than one meaning"],["frugal","careful about spending money"],
+["benevolent","kind and well meaning"],["pragmatic","dealing with things in a practical, realistic way"],["eloquent","fluent and persuasive in speaking"],
+["tenacious","holding firmly to a goal and not giving up"],["lucid","clearly expressed and easy to understand"],["gregarious","fond of company and social"]];
+const $=id=>document.getElementById(id);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let deck=[],i=-1,score=0,hints=0,rec=null,listening=false,voiceOK=!!window.speechSynthesis;
+$('note').textContent=(SR?'':'Voice input is not available in this browser, so type your answers. ')+(voiceOK?'':'Speech output is not available, so Lexi will only show text.');
+function say(t,cls='agent'){const d=document.createElement('div');d.className='msg '+cls;d.innerHTML=t;$('log').append(d);$('log').scrollTop=1e5;}
+function speak(t){if(!voiceOK)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t.replace(/<[^>]+>/g,''));u.rate=.95;speechSynthesis.speak(u);}catch(e){}}
+function lexi(t,s){say(t);speak(s||t);}
+function norm(s){return s.toLowerCase().replace(/[^a-z ]/g,'').trim();}
+function lev(a,b){const m=[...Array(a.length+1)].map((_,i)=>[i]);for(let j=1;j<=b.length;j++)m[0][j]=j;
+ for(let x=1;x<=a.length;x++)for(let y=1;y<=b.length;y++)m[x][y]=Math.min(m[x-1][y]+1,m[x][y-1]+1,m[x-1][y-1]+(a[x-1]==b[y-1]?0:1));return m[a.length][b.length];}
+function ask(){const w=deck[i];hints=0;$('lvl').textContent=`Word ${i+1} of ${deck.length}`;
+ lexi(`Which word means: <b>${w[1]}</b>?`,`Which word means: ${w[1]}?`);}
+function next(){i++;if(i>=deck.length){lexi(`Round complete. You scored ${score} out of ${deck.length*2}.`);i=deck.length;return;}ask();}
+function check(raw){if(i<0||i>=deck.length||!raw)return;say(raw,'you');const w=deck[i][0],t=norm(raw);
+ const hit=t.split(' ').some(p=>p&&lev(p,w)<=(w.length>6?1:0));
+ if(hit){const pts=hints?1:2;score+=pts;$('score').textContent='Score '+score;
+  lexi(`<span class="good">Correct!</span> ${w}: ${deck[i][1]}. +${pts}`,`Correct! ${w} means ${deck[i][1]}.`);
+  lexi('Say the word in a sentence of your own if you like. Next word.','Next word.');next();}
+ else lexi(`<span class="bad">Not quite.</span> Try again, ask for a hint, or skip.`,'Not quite. Try again, ask for a hint, or skip.');}
+function hint(){if(i<0||i>=deck.length)return;hints++;const w=deck[i][0];
+ lexi(`It starts with "${w.slice(0,hints+1)}" and has ${w.length} letters.`,`It starts with ${w.slice(0,hints+1).split('').join(' ')} and has ${w.length} letters.`);}
+function skip(){if(i<0||i>=deck.length)return;const w=deck[i];lexi(`The word was <b>${w[0]}</b>: ${w[1]}.`,`The word was ${w[0]}, which means ${w[1]}.`);next();}
+function listen(){if(!SR){say('Voice input is not supported here. Please type your answer.');return;}
+ if(listening){rec&&rec.stop();return;}
+ try{speechSynthesis&&speechSynthesis.cancel();rec=new SR();rec.lang='en-US';rec.maxAlternatives=3;
+  rec.onstart=()=>{listening=true;$('mic').classList.add('on');$('mic').textContent='Listening… tap to stop';};
+  rec.onend=()=>{listening=false;$('mic').classList.remove('on');$('mic').textContent='🎤 Speak your answer';};
+  rec.onerror=e=>say('Could not use the microphone ('+e.error+'). You can type your answer instead.');
+  rec.onresult=e=>{const alts=[...e.results[0]].map(a=>a.transcript);const w=i>=0&&deck[i]?deck[i][0]:'';
+   check(alts.find(a=>norm(a).includes(w))||alts[0]);};
+  rec.start();}catch(e){say('Microphone is blocked here. Please type your answer.');}}
+function start(){deck=[...WORDS].sort(()=>Math.random()-.5).slice(0,8);i=-1;score=0;$('score').textContent='Score 0';$('log').innerHTML='';
+ lexi("Hi, I'm Lexi. I'll describe a word and you tell me what it is. Let's begin.");next();}
+$('start').onclick=start;$('mic').onclick=listen;$('rep').onclick=()=>{if(deck[i])speak('Which word means: '+deck[i][1]+'?');};
+$('hint').onclick=hint;$('skip').onclick=skip;
+$('f').onsubmit=e=>{e.preventDefault();const v=$('ans').value;$('ans').value='';check(v);};
+say('Tap <b>Start a new round</b>. Sound on helps: Lexi speaks every question.');
+</script>
+
+</body></html>
